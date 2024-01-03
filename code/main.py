@@ -19,6 +19,8 @@ marker_type = cv2.aruco.DICT_5X5_100
 cap = cv2.VideoCapture('https://192.168.7.243:8080/video')
 target_im = cv2.imread('../test.png')
 
+# target_im = target_im.resize((1800, 2880))
+
 cv2.imshow(f"frame", target_im)
 cv2.waitKey(0)
 
@@ -76,7 +78,7 @@ while True:
         target_points = np.array([[0, h], [w, h], [w, 0], [0, 0]])
         M = cv2.findHomography(np.array(marker_centers), target_points, cv2.USAC_MAGSAC)[0]
 
-    detected = cv2.warpPerspective(target_im, M, (w, h))
+    detected = cv2.warpPerspective(target_im, M, (target_im.shape[1], target_im.shape[0]))
     cv2.imshow(f"frame", detected)
     key = cv2.waitKey(1)
     if key == ord('q'):
