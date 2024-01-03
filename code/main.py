@@ -33,11 +33,28 @@ marker_centers = np.array([[-1, -1], [-1, -1], [-1, -1], [-1, -1]])
 
 M = np.eye(3, 3)
 
+def find_shape_embed(shape1, shape2):
+    # Scales shape 1 to exactly cover shape 2 and returns the new shape 1
+    h_w_ratio_1 = float(shape1[0]) / float(shape1[1])
+    h_w_ratio_2 = float(shape2[0]) / float(shape2[1])
+
+    ## shape 1 is wider in proportion than shape 2
+    if h_w_ratio_1 < h_w_ratio_2:
+        ## If so the height of the new shape is that of shape 2, but the width is scaled
+        return (int(shape2[0]), int(shape2[0] / h_w_ratio_1))
+    elif h_w_ratio_1 > h_w_ratio_2:
+        ## If so the width of the new shape is that of shape 2, but the height is scaled
+        return (int(shape2[1] * h_w_ratio_1), int(shape2[1]))
+    ## They are exactly the same
+    else:
+        return shape2
+
 while True: 
     ret, frame = cap.read()
     # print(frame.shape)
     h, w, _ = frame.shape
     h, w, _ = target_im.shape
+    h, w = find_shape_embed(target_im.shape, frame.shape)
     markerCorners, marker_ids, rejectedCandidates = \
         detector.detectMarkers(frame, markerCorners, marker_ids, rejectedCandidates)
     detected = frame.copy()
@@ -50,12 +67,14 @@ while True:
         rect_radius = 60
         detected = cv2.rectangle(detected, ct - rect_radius, \
                                  ct + rect_radius, (0, 255, 255), 4) 
-        marker_centers[marker_ids[m][0]] = ct
+        found_marker = marker_ids[m][0]
+        if(found_marker < 4):
+            ### Make sure if it thinks it found a marker it's one of the four
+            marker_centers[found_marker] = ct
     if -1 not in marker_centers: ## All values default to -1, if no -1, array has been populated
         # print("populated markers successfully")
         target_points = np.array([[0, h], [w, h], [w, 0], [0, 0]])
         M = cv2.findHomography(np.array(marker_centers), target_points, cv2.USAC_MAGSAC)[0]
-
 
     detected = cv2.warpPerspective(target_im, M, (w, h))
     cv2.imshow(f"frame", detected)
