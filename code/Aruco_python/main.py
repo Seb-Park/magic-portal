@@ -21,6 +21,9 @@ class OpenGLGlyphs:
                                [-1.0,-1.0,-1.0,-1.0],
                                [-1.0,-1.0,-1.0,-1.0],
                                [ 1.0, 1.0, 1.0, 1.0]])
+
+    VIEW_MATRIX = np.eye(4)
+    view_init = False
  
     def __init__(self):
         # initialise webcam and start thread
@@ -31,7 +34,7 @@ class OpenGLGlyphs:
         # self.webcam = 
  
         # initialise shapes
-        self.wolf = None
+        self.hero = None
         self.file = None
         self.cnt = 1
  
@@ -90,7 +93,7 @@ class OpenGLGlyphs:
          
         # Load 3d object
         File = 'Sinbad_4_000001.obj'
-        self.wolf = OBJ(File,swapyz=True)
+        self.hero = OBJ(File, swapyz=True)
  
         # assign texture
         glEnable(GL_TEXTURE_2D)
@@ -128,14 +131,16 @@ class OpenGLGlyphs:
         glPopMatrix()
  
         # handle glyphs
-        image = self._handle_glyphs(image)
+        # image = self._handle_glyphs(image)
+        self._handle_glyphs(image)
 
         glutSwapBuffers()
         
-        image = np.zeros((480, 640, 3), dtype=np.uint8)
-        glReadPixels(0, 0, 640, 480, GL_BGR, GL_UNSIGNED_BYTE, image)
-        image = np.flip(image, axis=2)
-        cv2.imshow("blah", image)
+        gl_w, gl_h = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
+        edited = np.zeros((gl_h, gl_w, 3), dtype=np.uint8)
+        glReadPixels(0, 0, gl_w, gl_h, GL_BGR, GL_UNSIGNED_BYTE, edited)
+        edited = np.flip(edited, axis=2)
+        cv2.imshow("blah", edited)
  
     def _handle_glyphs(self, image):
         # aruco data
@@ -146,7 +151,7 @@ class OpenGLGlyphs:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
         if ids is not None and corners is not None: 
-            rvecs, tvecs,_objpoints = aruco.estimatePoseSingleMarkers(corners[0],0.6,self.cam_matrix,self.dist_coefs)
+            rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[0],0.6,self.cam_matrix,self.dist_coefs)
             #build view matrix
             # board = aruco.GridBoard_create(6,8,0.05,0.01,aruco_dict)
             # corners, ids, rejectedImgPoints,rec_idx = aruco.refineDetectedMarkers(gray,board,corners,ids,rejectedImgPoints)
@@ -167,18 +172,26 @@ class OpenGLGlyphs:
 
             view_matrix = np.transpose(view_matrix)
 
-            # load view matrix and draw shape
-            glPushMatrix()
-            glLoadMatrixd(view_matrix)
+            if(not self.view_init):
+                self.VIEW_MATRIX = view_matrix
+                self.view_init = True
+            else:
+                smooth_f = 0.7
+                self.VIEW_MATRIX = self.VIEW_MATRIX * smooth_f + view_matrix * (1 - smooth_f)
 
-            glCallList(self.wolf.gl_list)
+            # load view matrix and draw shape
+        if self.view_init:
+            glPushMatrix()
+            glLoadMatrixd(self.VIEW_MATRIX)
+
+            glCallList(self.hero.gl_list)
 
             glPopMatrix()
 
-        # cv2.imshow("cv frame", np.flip(image, axis=2))
-        cv2.imshow("cv frame", image)
+            # cv2.imshow("cv frame", np.flip(image, axis=2))
+            cv2.imshow("cv frame", image)
 
-        cv2.waitKey(1)
+            cv2.waitKey(1)
         
 
     def _draw_background(self):

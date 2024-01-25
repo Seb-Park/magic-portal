@@ -1,10 +1,10 @@
 import pygame
 from OpenGL.GL import *
 
-def MTL(filename):
+def MTL(filename, dir=''):
     contents = {}
     mtl = None
-    for line in open(filename, "r"):
+    for line in open(dir + filename, "r"):
         if line.startswith('#'): continue
         values = line.split()
         if not values: continue
@@ -15,8 +15,8 @@ def MTL(filename):
         elif values[0] == 'map_Kd':
             # load the texture referred to by this declaration
             mtl[values[0]] = list(map(str, values[1:]))
-            print("asdfasQWEADSFJA", values[1], filename)
-            surf = pygame.image.load(values[1])
+            # print("asdfasQWEADSFJA", values[1], filename)
+            surf = pygame.image.load(dir + values[1])
             image = pygame.image.tostring(surf, 'RGBA', 1)
             ix, iy = surf.get_rect().size
             texid = mtl['texture_Kd'] = glGenTextures(1)
@@ -32,7 +32,7 @@ def MTL(filename):
     return contents
 
 class OBJ:
-    def __init__(self, filename, swapyz=False):
+    def __init__(self, filename, swapyz=False, dir=''):
         """Loads a Wavefront OBJ file. """
         self.vertices = []
         self.normals = []
@@ -40,7 +40,7 @@ class OBJ:
         self.faces = []
 
         material = None
-        for line in open(filename, "r"):
+        for line in open(dir + filename, "r"):
             if line.startswith('#'): continue
             values = line.split()
             if not values: continue
@@ -59,7 +59,7 @@ class OBJ:
             elif values[0] in ('usemtl', 'usemat'):
                 material = values[1]
             elif values[0] == 'mtllib':
-                self.mtl = MTL(values[1])
+                self.mtl = MTL(values[1], dir=dir)
             elif values[0] == 'f':
                 face = []
                 texcoords = []
