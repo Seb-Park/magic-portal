@@ -108,7 +108,7 @@ class OpenGLGlyphs:
  
         # convert image to OpenGL texture format
         bg_image = cv2.flip(image, 0)
-        bg_image = np.zeros(bg_image.shape, dtype=np.uint8)
+        # bg_image = np.zeros(bg_image.shape, dtype=np.uint8)
         bg_image = Image.fromarray(bg_image)     
         ix = bg_image.size[0]
         iy = bg_image.size[1]
@@ -131,6 +131,11 @@ class OpenGLGlyphs:
         image = self._handle_glyphs(image)
 
         glutSwapBuffers()
+        
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+        glReadPixels(0, 0, 640, 480, GL_BGR, GL_UNSIGNED_BYTE, image)
+        image = np.flip(image, axis=2)
+        cv2.imshow("blah", image)
  
     def _handle_glyphs(self, image):
         # aruco data
@@ -171,6 +176,7 @@ class OpenGLGlyphs:
             glPopMatrix()
 
         # cv2.imshow("cv frame", np.flip(image, axis=2))
+        cv2.imshow("cv frame", image)
 
         cv2.waitKey(1)
         
