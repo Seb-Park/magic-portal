@@ -144,6 +144,25 @@ while True:
         for i in range(0, len(marker_ids)):
             rvec, tvec, markerPoints = cv2.aruco.estimatePoseSingleMarkers(marker_corners[i], 0.02, mtx, dist)
             new = cv2.drawFrameAxes(frame, mtx, dist, rvec, tvec, 0.02)
+
+    for m, marker in enumerate(marker_corners):
+        ### Populate marker data
+        ct = np.array(find_center_four_points(marker[0]), dtype=np.int32)
+        rect_radius = 60
+        detected = cv2.rectangle(detected, ct - rect_radius, \
+                                 ct + rect_radius, (0, 255, 255), 4) 
+        found_marker = marker_ids[m][0]
+        if(found_marker < 4):
+            ### Make sure if it thinks it found a marker it's one of the four
+            marker_centers[found_marker] = ct
+            if np.all(lerped_marker_centers[found_marker] >= 0):
+                lerped_marker_centers[found_marker] = lerped_marker_centers[found_marker] * smooth_factor + (marker_centers[found_marker] * (1 - smooth_factor))
+            else:
+                lerped_marker_centers[found_marker] = ct
+    if -1 not in marker_centers: ## All values default to -1, if no -1, array has been populated
+        # print("populated markers successfully")
+        target_points = np.array([[0, h], [w, h], [w, 0], [0, 0]])
+        M = cv2.findHomography(np.array(lerped_marker_centers), target_points, cv2.USAC_MAGSAC)[0]
     
     cv2.imshow(f"frame", frame)
     key = cv2.waitKey(1)

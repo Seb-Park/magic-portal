@@ -9,6 +9,9 @@ from pygame.constants import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
+import cv2
+import numpy as np
+
 # IMPORT OBJECT LOADER
 from objloader import *
 
@@ -16,7 +19,7 @@ pygame.init()
 viewport = (800,600)
 hx = viewport[0]/2
 hy = viewport[1]/2
-srf = pygame.display.set_mode(viewport, OPENGL | DOUBLEBUF)
+srf = pygame.display.set_mode(viewport, OPENGL | pygame.DOUBLEBUF)
 
 glLightfv(GL_LIGHT0, GL_POSITION,  (-40, 200, 100, 0.0))
 glLightfv(GL_LIGHT0, GL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
@@ -28,7 +31,7 @@ glEnable(GL_DEPTH_TEST)
 glShadeModel(GL_SMOOTH)           # most obj files expect to be smooth-shaded
 
 # LOAD OBJECT AFTER PYGAME INIT
-obj = OBJ(sys.argv[1], swapyz=False, dir=sys.argv[2])
+obj = OBJ(sys.argv[1], swapyz=True, dir=sys.argv[2])
 
 clock = pygame.time.Clock()
 
@@ -44,7 +47,7 @@ tx, ty = (0,0)
 zpos = 5
 rotate = move = False
 while 1:
-    clock.tick(30)
+    clock.tick(20)
     for e in pygame.event.get():
         if e.type == QUIT:
             sys.exit()
@@ -77,3 +80,10 @@ while 1:
     glCallList(obj.gl_list)
 
     pygame.display.flip()
+
+    surface = pygame.display.get_surface()
+    hello = pygame.surfarray.array3d(surface)
+
+    srf.set_alpha(0)
+
+    # cv2.imshow("Frame", np.array(pygame.surfarray.pixels2d(srf)))
