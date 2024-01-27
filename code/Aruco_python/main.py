@@ -24,11 +24,16 @@ class OpenGLGlyphs:
 
     VIEW_MATRIX = np.eye(4)
     view_init = False
+    MARKER_SIZE = 0.43
+    SCREEN_SIZE = 7
  
     def __init__(self):
         # initialise webcam and start thread
         self.webcam = VideoStream(src=0).start()
-        self.remote_cam = cv2.VideoCapture('https://172.18.130.226:8080/video')
+        self.webcam = cv2.VideoCapture(0)
+        # self.webcam = cv2.VideoCapture('https://10.38.2.222:8080/video')
+        # self.webcam = VideoStream(src='https://172.18.130.226:8080/video').start()
+        self.remote_cam = cv2.VideoCapture('https://10.38.2.222:8080/video')
         # self.webcam = VideoStream(src='https://172.18.130.226:8080/video').start()
         # self.webcam = cv2.VideoCapture(0)
         # self.webcam = 
@@ -104,8 +109,9 @@ class OpenGLGlyphs:
         glLoadIdentity()
  
         # get image from webcam
-        image = self.webcam.read()
-        res, frame = self.remote_cam.read()
+        # image = self.webcam.read()
+        _, image = self.webcam.read()
+        res, image = self.remote_cam.read()
         # cv2.imshow("frame", frame)
         # image = imutils.resize(image,width=640)
  
@@ -151,7 +157,8 @@ class OpenGLGlyphs:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
         if ids is not None and corners is not None: 
-            rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[0],0.6,self.cam_matrix,self.dist_coefs)
+            # rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[0], 0.6, self.cam_matrix,self.dist_coefs)
+            rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[0], self.MARKER_SIZE, self.cam_matrix,self.dist_coefs)
             #build view matrix
             # board = aruco.GridBoard_create(6,8,0.05,0.01,aruco_dict)
             # corners, ids, rejectedImgPoints,rec_idx = aruco.refineDetectedMarkers(gray,board,corners,ids,rejectedImgPoints)
@@ -209,12 +216,14 @@ class OpenGLGlyphs:
         # setup and run OpenGL
         glutInit()
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
-        glutInitWindowSize(640, 480)
+        screen_dims = (2560, 1600)
+        screen_dims = (640, 480)
+        glutInitWindowSize(*screen_dims)
         glutInitWindowPosition(500, 400)
         self.window_id = glutCreateWindow(b"OpenGL Glyphs")
         glutDisplayFunc(self._draw_scene)
         glutIdleFunc(self._draw_scene)
-        self._init_gl(640, 480)
+        self._init_gl(*screen_dims)
         glutMainLoop()
   
 # run an instance of OpenGL Glyphs 
