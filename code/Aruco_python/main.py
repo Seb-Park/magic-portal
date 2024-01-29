@@ -6,7 +6,7 @@ from PIL import Image
 import numpy as np
 from objloader import *
 from imutils.video import VideoStream
-import cv2.aruco as aruco
+from cv2 import aruco as aruco
 import yaml
 import imutils
 
@@ -26,6 +26,9 @@ class OpenGLGlyphs:
     view_init = False
     MARKER_SIZE = 0.43
     SCREEN_SIZE = 7
+    smooth_f = 0.9
+    marker_centers = np.array([[-1, -1], [-1, -1], [-1, -1], [-1, -1]])
+    # lerped_marker_centers = marker_centers.copy()
  
     def __init__(self):
         # initialise webcam and start thread
@@ -98,7 +101,7 @@ class OpenGLGlyphs:
          
         # Load 3d object
         File = 'Sinbad_4_000001.obj'
-        self.hero = OBJ(File, swapyz=True)
+        self.hero = OBJ(File, swapyz=False)
  
         # assign texture
         glEnable(GL_TEXTURE_2D)
@@ -117,7 +120,7 @@ class OpenGLGlyphs:
  
         # convert image to OpenGL texture format
         bg_image = cv2.flip(image, 0)
-        # bg_image = np.zeros(bg_image.shape, dtype=np.uint8)
+        bg_image = np.zeros(bg_image.shape, dtype=np.uint8)
         bg_image = Image.fromarray(bg_image)     
         ix = bg_image.size[0]
         iy = bg_image.size[1]
@@ -145,8 +148,27 @@ class OpenGLGlyphs:
         gl_w, gl_h = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
         edited = np.zeros((gl_h, gl_w, 3), dtype=np.uint8)
         glReadPixels(0, 0, gl_w, gl_h, GL_BGR, GL_UNSIGNED_BYTE, edited)
-        edited = np.flip(edited, axis=2)
-        cv2.imshow("blah", edited)
+        edited = np.flip(edited, axis=0)
+        # edited = np.flip(edited, axis=2)
+        if(self.view_init):
+            # h, w = self.find_shape_embed((gl_h, gl_w), image.shape)
+            new_from_points = self.scale_four_points((gl_h, gl_w), 
+                                             (image.shape[0], image.shape[1]), 
+                                             self.marker_centers)
+            target_points = np.array([[0, gl_h], 
+                                      [gl_w, gl_h], 
+                                      [gl_w, 0], 
+                                      [0, 0]])
+            M = cv2.findHomography(new_from_points, target_points, cv2.USAC_MAGSAC)[0]
+        # lined = edited.copy()
+        # for i in range(-1, 3):
+        #     lined = cv2.line(lined, 
+        #                      new_from_points[i].astype(np.int32), 
+        #                      new_from_points[i + 1].astype(np.int32), 
+        #                      (0, 255, 0), 9) 
+        # cv2.imshow("lined", lined)
+        warped = cv2.warpPerspective(edited, M, (gl_w, gl_h))
+        cv2.imshow("Warped", warped)
  
     def _handle_glyphs(self, image):
         # aruco data
@@ -156,18 +178,28 @@ class OpenGLGlyphs:
         height, width, channels = image.shape
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-        if ids is not None and corners is not None: 
-            # rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[0], 0.6, self.cam_matrix,self.dist_coefs)
-            rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[0], self.MARKER_SIZE, self.cam_matrix,self.dist_coefs)
-            #build view matrix
-            # board = aruco.GridBoard_create(6,8,0.05,0.01,aruco_dict)
-            # corners, ids, rejectedImgPoints,rec_idx = aruco.refineDetectedMarkers(gray,board,corners,ids,rejectedImgPoints)
-            # ret,rvecs,tvecs = aruco.estimatePoseBoard(corners,ids,board,self.cam_matrix,self.dist_coefs)
-            rmtx = cv2.Rodrigues(rvecs)[0]
+        if ids is not None and corners is not None and len(ids) == 4: 
+            rmtx = None
+            all_tvecs = []
+            marker_center_temp = [None, None, None, None]
+            for i, id in enumerate(ids):
+                # rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[0], 0.6, self.cam_matrix,self.dist_coefs)
+                rvecs, tvecs, _objpoints = aruco.estimatePoseSingleMarkers(corners[i], self.MARKER_SIZE, self.cam_matrix,self.dist_coefs)
+                #build view matrix
+                # board = aruco.GridBoard_create(6,8,0.05,0.01,aruco_dict)
+                # corners, ids, rejectedImgPoints,rec_idx = aruco.refineDetectedMarkers(gray,board,corners,ids,rejectedImgPoints)
+                # ret,rvecs,tvecs = aruco.estimatePoseBoard(corners,ids,board,self.cam_matrix,self.dist_coefs)
+                if rmtx is None:
+                    rmtx = cv2.Rodrigues(rvecs)[0]
+                
+                all_tvecs.append(tvecs[0][0])
+                marker_center_temp[int(id)] = self.find_center_four_points(corners[i][0])
 
-            view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],tvecs[0][0][0]],
-                                    [rmtx[1][0],rmtx[1][1],rmtx[1][2],tvecs[0][0][1]],
-                                    [rmtx[2][0],rmtx[2][1],rmtx[2][2],tvecs[0][0][2]],
+            avg_tvecs = np.mean(np.array(all_tvecs), axis=0)
+
+            view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],avg_tvecs[0]],
+                                    [rmtx[1][0],rmtx[1][1],rmtx[1][2],avg_tvecs[1]],
+                                    [rmtx[2][0],rmtx[2][1],rmtx[2][2],avg_tvecs[2]],
                                     [0.0       ,0.0       ,0.0       ,1.0    ]])
 
             # view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],tvecs[0]],
@@ -181,10 +213,11 @@ class OpenGLGlyphs:
 
             if(not self.view_init):
                 self.VIEW_MATRIX = view_matrix
+                self.marker_centers = np.array(marker_center_temp)
                 self.view_init = True
             else:
-                smooth_f = 0.7
-                self.VIEW_MATRIX = self.VIEW_MATRIX * smooth_f + view_matrix * (1 - smooth_f)
+                self.VIEW_MATRIX = self.VIEW_MATRIX * self.smooth_f + view_matrix * (1 - self.smooth_f)
+                self.marker_centers = self.marker_centers * self.smooth_f + np.array(marker_center_temp) * (1 - self.smooth_f)
 
             # load view matrix and draw shape
         if self.view_init:
@@ -196,7 +229,7 @@ class OpenGLGlyphs:
             glPopMatrix()
 
             # cv2.imshow("cv frame", np.flip(image, axis=2))
-            cv2.imshow("cv frame", image)
+            # cv2.imshow("cv frame", image)
 
             cv2.waitKey(1)
         
@@ -210,7 +243,59 @@ class OpenGLGlyphs:
         glTexCoord2f(0.0, 0.0); glVertex3f(-4.0,  3.0, 0.0)
         glEnd( )
 
+    def find_shape_embed(self, shape1, shape2):
+        # Scales shape 1 to exactly cover shape 2 and returns the new shape 1
+        h_w_ratio_1 = float(shape1[0]) / float(shape1[1])
+        h_w_ratio_2 = float(shape2[0]) / float(shape2[1])
 
+        ## shape 1 is wider in proportion than shape 2
+        if h_w_ratio_1 < h_w_ratio_2:
+            ## If so the height of the new shape is that of shape 2, but the width is scaled
+            return (int(shape2[0]), int(shape2[0] / h_w_ratio_1))
+        elif h_w_ratio_1 > h_w_ratio_2:
+            ## If so the width of the new shape is that of shape 2, but the height is scaled
+            return (int(shape2[1] * h_w_ratio_1), int(shape2[1]))
+        ## They are exactly the same
+        else:
+            return shape2
+    
+    def scale_four_points(self, shape1, shape2, pts):
+        '''
+        pts - points in shape 2 that are to be scaled appropriately
+        to be in scale with shape 1
+        '''
+        # Scales shape 1 to exactly cover shape 2 and returns the new shape 1
+        h_w_ratio_1 = float(shape1[0]) / float(shape1[1])
+        h_w_ratio_2 = float(shape2[0]) / float(shape2[1])
+
+        scale = 1
+
+        ## shape 1 is wider in proportion than shape 2
+        if h_w_ratio_1 < h_w_ratio_2:
+            ## If so the height of the new shape is that of shape 2, but the width is scaled and wider
+            scale = float(shape1[0]) / float(shape2[0])
+        # elif h_w_ratio_1 > h_w_ratio_2:
+        else:
+            ## If so the width of the new shape is that of shape 2, but the height is scaled and taller
+            scale = float(shape1[1]) / float(shape2[1])
+        ## They are exactly the same
+        # else:
+        #     return shape2
+        # return np.array([
+        #         [pts[0][0], pts[0][1]],
+        #         [pts[1][0], pts[1][1]],
+        #         [pts[2][0], pts[2][1]],
+        #         [pts[3][0], pts[3][1]]
+        #     ])
+        return np.array(pts) * scale
+
+    def find_center_four_points(self, four_points):
+        # https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection#Given_two_points_on_each_line
+        c, b, d, a = four_points
+        px_num = (((a[0]*b[1]-a[1]*b[0])*(c[0]-d[0]))-((a[0]-b[0])*(c[0]*d[1]-c[1]*d[0])))
+        py_num = (((a[0]*b[1]-a[1]*b[0])*(c[1]-d[1]))-((a[1]-b[1])*(c[0]*d[1]-c[1]*d[0])))
+        p_den = ((a[0]-b[0]) * (c[1]-d[1])) - ((a[1] - b[1]) * (c[0] - d[0]))
+        return [px_num / p_den, py_num / p_den]
  
     def main(self):
         # setup and run OpenGL
